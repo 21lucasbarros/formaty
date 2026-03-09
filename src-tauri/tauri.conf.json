@@ -10,14 +10,20 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
+        "label": "main",
         "title": "Formaty",
-        "width": 800,
-        "height": 600,
+        "width": 220,
+        "height": 300,
         "fullscreen": false,
         "transparent": true,
-        "center": true
+        "decorations": false,
+        "resizable": false,
+        "visible": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true
       }
     ],
     "security": {
