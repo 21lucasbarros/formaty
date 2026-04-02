@@ -55,50 +55,6 @@ export default function App() {
     return () => document.removeEventListener("mousedown", handler);
   }, [dropdownOpen]);
 
-  // Injetar CSS global
-  useEffect(() => {
-    const style = document.createElement("style");
-    style.textContent = `
-      html, body {
-        overflow: hidden !important;
-        width: 220px; height: 350px;
-        margin: 0; padding: 0;
-      }
-      @keyframes fadeDown {
-        from { opacity: 0; transform: translateY(-5px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes fadeUp {
-        from { opacity: 0; transform: translateY(6px); }
-        to   { opacity: 1; transform: translateY(0); }
-      }
-      @keyframes fadeOut {
-        0%   { opacity: 1; transform: translateY(0); }
-        70%  { opacity: 1; }
-        100% { opacity: 0; transform: translateY(-4px); }
-      }
-      @keyframes spin { to { transform: rotate(360deg); } }
-      @keyframes pulse {
-        0%, 100% { opacity: 0.5; }
-        50%       { opacity: 1; }
-      }
-      @keyframes checkPop {
-        0%   { transform: scale(0.5); opacity: 0; }
-        60%  { transform: scale(1.2); opacity: 1; }
-        100% { transform: scale(1);   opacity: 1; }
-      }
-      .toast-enter { animation: fadeUp 0.22s ease forwards; }
-      .toast-exit  { animation: fadeOut 0.4s ease 2.4s forwards; }
-      .check-pop   { animation: checkPop 0.3s ease forwards; }
-      .fmt-scroll::-webkit-scrollbar { width: 3px; }
-      .fmt-scroll::-webkit-scrollbar-thumb {
-        background: rgba(255,255,255,0.15); border-radius: 99px;
-      }
-    `;
-    document.head.appendChild(style);
-    return () => style.remove();
-  }, []);
-
   const processFile = useCallback((f: File) => {
     if (!f.type.startsWith("image/")) return;
     const reader = new FileReader();
@@ -144,7 +100,60 @@ export default function App() {
   const selected = FORMATS.find((f) => f.value === selectedFormat)!;
 
   return (
-    <div className="w-[220px] h-[350px] flex flex-col text-white rounded-[18px] overflow-hidden select-none font-system relative bg-gradient-to-br from-neutral-900 via-neutral-900 to-black">
+    <>
+      <style>{`
+        html, body {
+          overflow: hidden !important;
+          width: 220px; height: 350px;
+          margin: 0; padding: 0;
+        }
+        @keyframes fadeDown {
+          from { opacity: 0; transform: translateY(-5px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeUp {
+          from { opacity: 0; transform: translateY(6px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeOut {
+          0%   { opacity: 1; transform: translateY(0); }
+          70%  { opacity: 1; }
+          100% { opacity: 0; transform: translateY(-4px); }
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes pulse {
+          0%, 100% { opacity: 0.5; }
+          50%       { opacity: 1; }
+        }
+        @keyframes checkPop {
+          0%   { transform: scale(0.5); opacity: 0; }
+          60%  { transform: scale(1.2); opacity: 1; }
+          100% { transform: scale(1);   opacity: 1; }
+        }
+        .toast-enter { animation: fadeUp 0.22s ease forwards; }
+        .toast-exit  { animation: fadeOut 0.4s ease 2.4s forwards; }
+        .check-pop   { animation: checkPop 0.3s ease forwards; }
+        .fmt-scroll::-webkit-scrollbar { width: 3px; }
+        .fmt-scroll::-webkit-scrollbar-thumb {
+          background: rgba(255,255,255,0.15); border-radius: 99px;
+        }
+      `}</style>
+
+      <div
+        style={{
+          width: 220,
+          height: 350,
+          display: "flex",
+          flexDirection: "column",
+          color: "white",
+          borderRadius: 18,
+          overflow: "hidden",
+          userSelect: "none",
+          fontFamily:
+            "-apple-system,'SF Pro Text',BlinkMacSystemFont,sans-serif",
+          position: "relative",
+        }}
+      >
         {/* ── Toast de sucesso ── */}
         {downloaded && (
           <div
