@@ -1,69 +1,110 @@
 import "./app.css";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-type Format =
-  | "PNG"
-  | "JPG"
-  | "JPEG"
-  | "WEBP"
-  | "GIF"
-  | "BMP"
-  | "TIFF"
-  | "ICO"
-  | "SVG"
-  | "AVIF";
+type Format = "PNG" | "JPG" | "WEBP" | "AVIF" | "GIF" | "BMP" | "TIFF" | "ICO";
 
+type Status = "idle" | "loading" | "done" | "error";
+
+type SourceFile = {
+  name: string;
+  preview: string;
+  size: number;
+  format: string;
+  width?: number;
+  height?: number;
+};
+
+// Apenas formatos que o backend (crate `image`) consegue codificar
 const FORMATS: { value: Format; desc: string }[] = [
-  { value: "PNG", desc: "Lossless" },
-  { value: "JPG", desc: "Compressed" },
-  { value: "JPEG", desc: "Compressed" },
-  { value: "WEBP", desc: "Modern" },
-  { value: "AVIF", desc: "Next-gen" },
-  { value: "GIF", desc: "Animated" },
+  { value: "PNG", desc: "Sem perda" },
+  { value: "JPG", desc: "Comprimido" },
+  { value: "WEBP", desc: "Moderno" },
+  { value: "AVIF", desc: "Nova geração" },
+  { value: "GIF", desc: "256 cores" },
   { value: "BMP", desc: "Bitmap" },
-  { value: "TIFF", desc: "Lossless" },
-  { value: "ICO", desc: "Icon" },
-  { value: "SVG", desc: "Vector" },
+  { value: "TIFF", desc: "Sem perda" },
+  { value: "ICO", desc: "Ícone" },
 ];
+
+const formatFromMime = (mime: string) => {
+  const sub = mime.split("/")[1]?.toUpperCase() ?? "";
+  if (sub === "JPEG") return "JPG";
+  if (sub === "X-ICON" || sub === "VND.MICROSOFT.ICON") return "ICO";
+  if (sub.startsWith("SVG")) return "SVG";
+  return sub;
+};
+
+const dataUrlSize = (url: string) => {
+  const b64 = url.slice(url.indexOf(",") + 1);
+  const padding = b64.endsWith("==") ? 2 : b64.endsWith("=") ? 1 : 0;
+  return Math.floor((b64.length * 3) / 4) - padding;
+};
+
+const formatBytes = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+};
+
+const baseName = (name: string) => name.replace(/\.[^.]+$/, "");
 
 export default function App() {
   const [selectedFormat, setSelectedFormat] = useState<Format>("PNG");
-  const [file, setFile] = useState<{ name: string; preview: string } | null>(
-    null,
-  );
-  const [status, setStatus] = useState<
-    "idle" | "dragging" | "done" | "loading" | "error"
-  >("idle");
+  const [file, setFile] = useState<SourceFile | null>(null);
+  const [status, setStatus] = useState<Status>("idle");
+  const [dragging, setDragging] = useState(false);
   const [convertedUrl, setConvertedUrl] = useState<string | null>(null);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
   const [downloaded, setDownloaded] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
+  const dragDepth = useRef(0);
+
+  // Toasts somem sozinhos
+  useEffect(() => {
+    if (!downloaded) return;
+    const t = setTimeout(() => setDownloaded(false), 2800);
+    return () => clearTimeout(t);
+  }, [downloaded]);
 
   useEffect(() => {
-    if (!dropdownOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(e.target as Node)
-      )
-        setDropdownOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [dropdownOpen]);
+    if (!errorMsg) return;
+    const t = setTimeout(() => setErrorMsg(null), 4500);
+    return () => clearTimeout(t);
+  }, [errorMsg]);
+
+  const resetResult = () => {
+    setConvertedUrl(null);
+    setStatus("idle");
+    setDownloaded(false);
+    setErrorMsg(null);
+  };
 
   const processFile = useCallback((f: File) => {
-    if (!f.type.startsWith("image/")) return;
+    if (!f.type.startsWith("image/")) {
+      setErrorMsg("Esse arquivo não é uma imagem");
+      return;
+    }
     const reader = new FileReader();
     reader.onload = (e) => {
-      setFile({ name: f.name, preview: e.target?.result as string });
-      setConvertedUrl(null);
-      setStatus("idle");
-      setDownloaded(false);
-      setErrorMsg(null);
+      const preview = e.target?.result as string;
+      const base: SourceFile = {
+        name: f.name,
+        preview,
+        size: f.size,
+        format: formatFromMime(f.type),
+      };
+      setFile(base);
+      resetResult();
+
+      const img = new Image();
+      img.onload = () =>
+        setFile((cur) =>
+          cur?.preview === preview
+            ? { ...cur, width: img.naturalWidth, height: img.naturalHeight }
+            : cur,
+        );
+      img.src = preview;
     };
     reader.readAsDataURL(f);
   }, []);
@@ -91,790 +132,375 @@ export default function App() {
     if (!convertedUrl || !file) return;
     const a = document.createElement("a");
     a.href = convertedUrl;
-    a.download = `${file.name.replace(/\.[^.]+$/, "")}.${selectedFormat.toLowerCase()}`;
+    a.download = `${baseName(file.name)}.${selectedFormat.toLowerCase()}`;
     a.click();
     setDownloaded(true);
-    setTimeout(() => setDownloaded(false), 3000);
   };
 
   const selected = FORMATS.find((f) => f.value === selectedFormat)!;
+  const convertedSize = convertedUrl ? dataUrlSize(convertedUrl) : null;
+  const sizeDelta =
+    file && convertedSize !== null
+      ? Math.round(((convertedSize - file.size) / file.size) * 100)
+      : null;
 
   return (
-    <>
-      <style>{`
-        html, body {
-          overflow: hidden !important;
-          width: 220px; height: 350px;
-          margin: 0; padding: 0;
-        }
-        @keyframes fadeDown {
-          from { opacity: 0; transform: translateY(-5px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeUp {
-          from { opacity: 0; transform: translateY(6px); }
-          to   { opacity: 1; transform: translateY(0); }
-        }
-        @keyframes fadeOut {
-          0%   { opacity: 1; transform: translateY(0); }
-          70%  { opacity: 1; }
-          100% { opacity: 0; transform: translateY(-4px); }
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        @keyframes pulse {
-          0%, 100% { opacity: 0.5; }
-          50%       { opacity: 1; }
-        }
-        @keyframes checkPop {
-          0%   { transform: scale(0.5); opacity: 0; }
-          60%  { transform: scale(1.2); opacity: 1; }
-          100% { transform: scale(1);   opacity: 1; }
-        }
-        .toast-enter { animation: fadeUp 0.22s ease forwards; }
-        .toast-exit  { animation: fadeOut 0.4s ease 2.4s forwards; }
-        .check-pop   { animation: checkPop 0.3s ease forwards; }
-        .fmt-scroll::-webkit-scrollbar { width: 3px; }
-        .fmt-scroll::-webkit-scrollbar-thumb {
-          background: rgba(255,255,255,0.15); border-radius: 99px;
-        }
-      `}</style>
-
-      <div
-        style={{
-          width: 220,
-          height: 350,
-          display: "flex",
-          flexDirection: "column",
-          color: "white",
-          borderRadius: 18,
-          overflow: "hidden",
-          userSelect: "none",
-          fontFamily:
-            "-apple-system,'SF Pro Text',BlinkMacSystemFont,sans-serif",
-          position: "relative",
-        }}
+    <div className="relative flex h-[350px] w-[220px] flex-col overflow-hidden rounded-[18px] text-white">
+      {/* ── Header / drag region ── */}
+      <header
+        data-tauri-drag-region
+        className="flex h-8 shrink-0 items-center justify-between px-3.5"
       >
-        {/* ── Toast de sucesso ── */}
-        {downloaded && (
-          <div
-            className="toast-enter toast-exit"
-            style={{
-              position: "absolute",
-              bottom: 58,
-              left: 12,
-              right: 12,
-              zIndex: 100,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              borderRadius: 10,
-              background: "rgba(30,30,34,0.95)",
-              border: "1px solid rgba(255,255,255,0.13)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-            }}
-          >
-            <div
-              className="check-pop"
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 99,
-                flexShrink: 0,
-                background: "rgba(52,199,89,0.2)",
-                border: "1px solid rgba(52,199,89,0.4)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                <path
-                  d="M1.5 5l2.5 2.5 4.5-5"
-                  stroke="#34c759"
-                  strokeWidth="1.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </div>
-            <div>
-              <p
-                style={{
-                  fontSize: 11,
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,0.88)",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                Download concluído
-              </p>
-              <p
-                style={{
-                  fontSize: 9.5,
-                  color: "rgba(255,255,255,0.35)",
-                  marginTop: 1,
-                }}
-              >
-                {file?.name.replace(/\.[^.]+$/, "")}.
-                {selectedFormat.toLowerCase()}
-              </p>
-            </div>
-          </div>
-        )}
-
-        {/* ── Toast de erro ── */}
-        {status === "error" && errorMsg && (
-          <div
-            className="toast-enter"
-            style={{
-              position: "absolute",
-              bottom: 58,
-              left: 12,
-              right: 12,
-              zIndex: 100,
-              display: "flex",
-              alignItems: "center",
-              gap: 8,
-              padding: "8px 12px",
-              borderRadius: 10,
-              background: "rgba(30,30,34,0.95)",
-              border: "1px solid rgba(255,59,48,0.3)",
-              backdropFilter: "blur(20px)",
-              WebkitBackdropFilter: "blur(20px)",
-              boxShadow: "0 4px 20px rgba(0,0,0,0.5)",
-            }}
-          >
-            <div
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 99,
-                flexShrink: 0,
-                background: "rgba(255,59,48,0.2)",
-                border: "1px solid rgba(255,59,48,0.4)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
-                <path
-                  d="M1 1l6 6M7 1L1 7"
-                  stroke="#ff3b30"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </svg>
-            </div>
-            <p
-              style={{
-                fontSize: 10.5,
-                color: "rgba(255,100,90,0.9)",
-                letterSpacing: "-0.01em",
-              }}
-            >
-              {errorMsg}
-            </p>
-          </div>
-        )}
-
-        {/* ── Drag region ── */}
-        <div
+        <span
           data-tauri-drag-region
-          style={{ height: 20, flexShrink: 0, cursor: "default" }}
-        />
-
-        {/* ── Drop zone ── */}
-        <div style={{ padding: "0 12px", flexShrink: 0 }}>
-          <div
-            onDragOver={(e) => {
-              e.preventDefault();
-              setStatus("dragging");
+          className="text-[11px] font-semibold tracking-tight text-white/70"
+        >
+          Formaty
+        </span>
+        {file && (
+          <button
+            onClick={() => {
+              setFile(null);
+              resetResult();
             }}
-            onDragLeave={() => setStatus("idle")}
-            onDrop={(e) => {
-              e.preventDefault();
-              const f = e.dataTransfer.files[0];
-              if (f) processFile(f);
-              else setStatus("idle");
-            }}
-            onClick={() => !file && fileInputRef.current?.click()}
-            style={{
-              height: 148,
-              borderRadius: 14,
-              border:
-                status === "dragging"
-                  ? "1.5px solid rgba(255,255,255,0.5)"
-                  : "1px solid rgba(255,255,255,0.12)",
-              background:
-                status === "dragging"
-                  ? "rgba(255,255,255,0.1)"
-                  : file
-                    ? "rgba(255,255,255,0.04)"
-                    : "rgba(255,255,255,0.055)",
-              cursor: file ? "default" : "pointer",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              transition: "all 0.2s ease",
-              position: "relative",
-              overflow: "hidden",
-            }}
+            className="rounded-md px-1.5 py-0.5 text-[10px] text-white/40 transition-colors hover:bg-white/10 hover:text-white/80"
           >
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="image/*"
-              style={{ display: "none" }}
-              onChange={(e) =>
-                e.target.files?.[0] && processFile(e.target.files[0])
-              }
-            />
+            Limpar
+          </button>
+        )}
+      </header>
 
-            {!file && status !== "dragging" && (
-              <div
-                style={{
-                  position: "absolute",
-                  inset: 6,
-                  borderRadius: 10,
-                  border: "1px dashed rgba(255,255,255,0.09)",
-                  pointerEvents: "none",
-                }}
+      {/* ── Drop zone ── */}
+      <div className="shrink-0 px-3">
+        <div
+          onDragEnter={(e) => {
+            e.preventDefault();
+            dragDepth.current++;
+            setDragging(true);
+          }}
+          onDragOver={(e) => e.preventDefault()}
+          onDragLeave={() => {
+            dragDepth.current = Math.max(0, dragDepth.current - 1);
+            if (dragDepth.current === 0) setDragging(false);
+          }}
+          onDrop={(e) => {
+            e.preventDefault();
+            dragDepth.current = 0;
+            setDragging(false);
+            const f = e.dataTransfer.files[0];
+            if (f) processFile(f);
+          }}
+          onClick={() => fileInputRef.current?.click()}
+          className={`group relative flex h-[140px] cursor-pointer items-center justify-center overflow-hidden rounded-[14px] border transition-all duration-200 ${
+            dragging
+              ? "scale-[1.02] border-accent/70 bg-accent/15"
+              : file
+                ? "border-white/10 bg-white/[0.04]"
+                : "border-white/10 bg-white/[0.05] hover:border-white/20 hover:bg-white/[0.08]"
+          }`}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.[0]) processFile(e.target.files[0]);
+              e.target.value = "";
+            }}
+          />
+
+          {file ? (
+            <>
+              <img
+                src={file.preview}
+                className="absolute inset-0 h-full w-full scale-110 object-cover blur-[14px] brightness-[0.35] saturate-[1.2]"
               />
-            )}
+              <img
+                src={file.preview}
+                className="relative max-h-[78px] max-w-[150px] rounded-lg border border-white/20 object-contain shadow-[0_6px_20px_rgba(0,0,0,0.45)]"
+              />
 
-            {file ? (
-              <div
-                style={{ width: "100%", height: "100%", position: "relative" }}
-              >
-                <img
-                  src={file.preview}
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    width: "100%",
-                    height: "100%",
-                    objectFit: "cover",
-                    filter: "blur(14px) brightness(0.35) saturate(1.2)",
-                    transform: "scale(1.12)",
-                  }}
-                />
-                <div
-                  style={{
-                    position: "absolute",
-                    inset: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 8,
-                  }}
-                >
-                  <img
-                    src={file.preview}
-                    style={{
-                      maxWidth: 96,
-                      maxHeight: 96,
-                      borderRadius: 9,
-                      border: "1px solid rgba(255,255,255,0.18)",
-                      boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
-                      objectFit: "contain",
-                    }}
-                  />
-                  <p
-                    style={{
-                      fontSize: 10,
-                      color: "rgba(255,255,255,0.65)",
-                      maxWidth: 155,
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                      letterSpacing: "-0.01em",
-                    }}
-                  >
-                    {file.name}
-                  </p>
-                </div>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setFile(null);
-                    setConvertedUrl(null);
-                    setStatus("idle");
-                    setDownloaded(false);
-                    setErrorMsg(null);
-                  }}
-                  style={{
-                    position: "absolute",
-                    top: 8,
-                    right: 8,
-                    width: 20,
-                    height: 20,
-                    borderRadius: 99,
-                    background: "rgba(0,0,0,0.5)",
-                    border: "1px solid rgba(255,255,255,0.12)",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "rgba(255,255,255,0.55)",
-                    transition: "background 0.15s",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.background = "rgba(200,50,50,0.65)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.background = "rgba(0,0,0,0.5)")
-                  }
-                >
-                  <svg width="7" height="7" viewBox="0 0 7 7" fill="none">
-                    <path
-                      d="M1 1l5 5M6 1L1 6"
-                      stroke="currentColor"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                    />
-                  </svg>
-                </button>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: 10,
-                  pointerEvents: "none",
-                }}
-              >
-                <div
-                  style={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 12,
-                    background: "rgba(255,255,255,0.07)",
-                    border: "1px solid rgba(255,255,255,0.1)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    animation:
-                      status === "dragging"
-                        ? "pulse 0.9s ease infinite"
-                        : "none",
-                  }}
-                >
-                  <svg
-                    width="22"
-                    height="22"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    style={{ opacity: status === "dragging" ? 0.95 : 0.45 }}
-                  >
-                    <path
-                      d="M12 4v13M8 9l4-5 4 5"
-                      stroke="white"
-                      strokeWidth="1.6"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
-                    <path
-                      d="M4 20h16"
-                      stroke="white"
-                      strokeWidth="1.4"
-                      strokeLinecap="round"
-                      strokeOpacity=".4"
-                    />
-                  </svg>
-                </div>
-                <div
-                  style={{
-                    textAlign: "center",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 3,
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: 12,
-                      color: "rgba(255,255,255,0.75)",
-                      letterSpacing: "-0.01em",
-                      fontWeight: 500,
-                    }}
-                  >
-                    {status === "dragging"
-                      ? "Solte aqui"
-                      : "Arraste uma imagem"}
-                  </p>
-                  {status !== "dragging" && (
-                    <p
-                      style={{ fontSize: 10, color: "rgba(255,255,255,0.28)" }}
-                    >
-                      ou{" "}
-                      <span style={{ color: "rgba(255,255,255,0.52)" }}>
-                        clique para escolher
+              {/* Info do arquivo */}
+              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent px-2.5 pt-4 pb-2">
+                <p className="truncate text-[10.5px] font-medium tracking-tight text-white/85">
+                  {file.name}
+                </p>
+                <div className="mt-0.5 flex items-center gap-1 text-[9.5px] text-white/45">
+                  <span className="rounded bg-white/15 px-1 font-semibold text-white/75">
+                    {file.format}
+                  </span>
+                  {file.width && (
+                    <span>
+                      {file.width}×{file.height}
+                    </span>
+                  )}
+                  <span>·</span>
+                  {status === "done" && convertedSize !== null ? (
+                    <span className="text-white/70">
+                      {formatBytes(file.size)} → {formatBytes(convertedSize)}
+                      <span
+                        className={`ml-1 font-semibold ${
+                          sizeDelta! <= 0 ? "text-success" : "text-orange-300"
+                        }`}
+                      >
+                        {sizeDelta! > 0 ? "+" : ""}
+                        {sizeDelta}%
                       </span>
-                    </p>
+                    </span>
+                  ) : (
+                    <span>{formatBytes(file.size)}</span>
                   )}
                 </div>
               </div>
-            )}
-          </div>
-        </div>
 
-        {/* ── Format selector ── */}
-        <div
-          ref={dropdownRef}
-          style={{ padding: "8px 12px 0", flexShrink: 0, position: "relative" }}
-        >
-          <button
-            onClick={() => setDropdownOpen((o) => !o)}
-            style={{
-              width: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              padding: "7px 10px",
-              borderRadius: 9,
-              border: dropdownOpen
-                ? "1px solid rgba(255,255,255,0.25)"
-                : "1px solid rgba(255,255,255,0.11)",
-              background: dropdownOpen
-                ? "rgba(255,255,255,0.11)"
-                : "rgba(255,255,255,0.06)",
-              cursor: "pointer",
-              outline: "none",
-              transition: "all 0.15s",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-              <span
-                style={{
-                  fontSize: 12,
-                  fontWeight: 600,
-                  color: "rgba(255,255,255,0.88)",
-                  letterSpacing: "-0.01em",
-                }}
-              >
-                {selected.value}
-              </span>
-              <span style={{ fontSize: 10, color: "rgba(255,255,255,0.28)" }}>
-                — {selected.desc}
-              </span>
-            </div>
-            <svg
-              width="10"
-              height="10"
-              viewBox="0 0 10 10"
-              fill="none"
-              style={{
-                opacity: 0.35,
-                transition: "transform 0.2s",
-                transform: dropdownOpen ? "rotate(180deg)" : "none",
-              }}
-            >
-              <path
-                d="M2 3.5l3 3 3-3"
-                stroke="white"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </svg>
-          </button>
-
-          {dropdownOpen && (
-            <div
-              className="fmt-scroll"
-              style={{
-                position: "absolute",
-                top: "calc(100% + 3px)",
-                left: 12,
-                right: 12,
-                maxHeight: 120,
-                overflowY: "auto",
-                zIndex: 50,
-                borderRadius: 10,
-                border: "1px solid rgba(255,255,255,0.11)",
-                background: "rgba(36,36,40,0.98)",
-                backdropFilter: "blur(24px)",
-                WebkitBackdropFilter: "blur(24px)",
-                boxShadow:
-                  "0 8px 28px rgba(0,0,0,0.55), inset 0 0 0 0.5px rgba(255,255,255,0.06)",
-                animation: "fadeDown 0.14s ease",
-              }}
-            >
-              {FORMATS.map((f, i) => {
-                const active = f.value === selectedFormat;
-                return (
-                  <button
-                    key={f.value}
-                    onClick={() => {
-                      setSelectedFormat(f.value);
-                      setConvertedUrl(null);
-                      if (status === "done" || status === "error")
-                        setStatus("idle");
-                      setDropdownOpen(false);
-                      setErrorMsg(null);
-                    }}
-                    style={{
-                      width: "100%",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      padding: "6px 10px",
-                      background: active ? "#0a84ff" : "transparent",
-                      borderTop:
-                        i !== 0 ? "1px solid rgba(255,255,255,0.05)" : "none",
-                      cursor: "pointer",
-                      outline: "none",
-                      transition: "background 0.1s",
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!active)
-                        e.currentTarget.style.background =
-                          "rgba(255,255,255,0.07)";
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!active)
-                        e.currentTarget.style.background = "transparent";
-                    }}
-                  >
-                    <div
-                      style={{ display: "flex", alignItems: "center", gap: 6 }}
-                    >
-                      <div
-                        style={{
-                          width: 10,
-                          display: "flex",
-                          justifyContent: "center",
-                        }}
-                      >
-                        {active && (
-                          <svg
-                            width="8"
-                            height="8"
-                            viewBox="0 0 8 8"
-                            fill="none"
-                          >
-                            <path
-                              d="M1 4l2.2 2.2L7 1.5"
-                              stroke="white"
-                              strokeWidth="1.4"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        )}
-                      </div>
-                      <span
-                        style={{
-                          fontSize: 11.5,
-                          fontWeight: active ? 600 : 400,
-                          color: active ? "white" : "rgba(255,255,255,0.78)",
-                          letterSpacing: "-0.01em",
-                        }}
-                      >
-                        {f.value}
-                      </span>
-                    </div>
-                    <span
-                      style={{
-                        fontSize: 9.5,
-                        color: active
-                          ? "rgba(255,255,255,0.6)"
-                          : "rgba(255,255,255,0.28)",
-                      }}
-                    >
-                      {f.desc}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-
-        {/* ── Action ── */}
-        <div
-          style={{
-            padding: "0 12px",
-            marginTop: "auto",
-            marginBottom: 14,
-            flexShrink: 0,
-          }}
-        >
-          {status === "loading" ? (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: 7,
-                padding: "8px 0",
-              }}
-            >
+              {/* Overlay de troca */}
+              {!dragging && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                  <span className="rounded-full border border-white/20 bg-black/50 px-2.5 py-1 text-[10px] font-medium text-white/85">
+                    Trocar imagem
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="pointer-events-none flex flex-col items-center gap-2.5">
+              <div className="absolute inset-1.5 rounded-[10px] border border-dashed border-white/10" />
               <div
-                style={{
-                  width: 12,
-                  height: 12,
-                  borderRadius: 99,
-                  border: "1.5px solid rgba(255,255,255,0.18)",
-                  borderTopColor: "rgba(255,255,255,0.8)",
-                  animation: "spin 0.7s linear infinite",
-                }}
-              />
-              <span style={{ fontSize: 10.5, color: "rgba(255,255,255,0.35)" }}>
-                Convertendo…
-              </span>
-            </div>
-          ) : status === "done" && convertedUrl ? (
-            <div style={{ display: "flex", gap: 6 }}>
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                  padding: "0 10px",
-                  borderRadius: 8,
-                  border: "1px solid rgba(255,255,255,0.1)",
-                  background: "rgba(255,255,255,0.05)",
-                }}
+                className={`flex h-11 w-11 items-center justify-center rounded-xl border transition-colors ${
+                  dragging
+                    ? "animate-soft-pulse border-accent/50 bg-accent/25"
+                    : "border-white/10 bg-white/[0.07]"
+                }`}
               >
-                <svg width="9" height="9" viewBox="0 0 9 9" fill="none">
+                <svg
+                  width="22"
+                  height="22"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  className={dragging ? "opacity-100" : "opacity-50"}
+                >
                   <path
-                    d="M1 4.5l2.5 2.5 4.5-5"
-                    stroke="rgba(255,255,255,0.55)"
-                    strokeWidth="1.4"
+                    d="M12 4v13M8 9l4-5 4 5"
+                    stroke="white"
+                    strokeWidth="1.6"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   />
+                  <path
+                    d="M4 20h16"
+                    stroke="white"
+                    strokeWidth="1.4"
+                    strokeLinecap="round"
+                    strokeOpacity=".4"
+                  />
                 </svg>
-                <span
-                  style={{ fontSize: 9.5, color: "rgba(255,255,255,0.45)" }}
-                >
-                  OK
-                </span>
               </div>
-              <button
-                onClick={download}
-                style={{
-                  flex: 1,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 5,
-                  padding: "8px 0",
-                  borderRadius: 9,
-                  border: downloaded
-                    ? "1px solid rgba(52,199,89,0.35)"
-                    : "1px solid rgba(255,255,255,0.16)",
-                  background: downloaded
-                    ? "rgba(52,199,89,0.12)"
-                    : "rgba(255,255,255,0.1)",
-                  cursor: "pointer",
-                  outline: "none",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  color: downloaded
-                    ? "rgba(52,199,89,0.9)"
-                    : "rgba(255,255,255,0.82)",
-                  letterSpacing: "-0.01em",
-                  transition: "all 0.3s ease",
-                }}
-                onMouseEnter={(e) => {
-                  if (!downloaded)
-                    e.currentTarget.style.background = "rgba(255,255,255,0.16)";
-                }}
-                onMouseLeave={(e) => {
-                  if (!downloaded)
-                    e.currentTarget.style.background = "rgba(255,255,255,0.1)";
-                }}
-              >
-                {downloaded ? (
-                  <>
-                    <svg
-                      width="11"
-                      height="11"
-                      viewBox="0 0 10 10"
-                      fill="none"
-                      className="check-pop"
-                    >
-                      <path
-                        d="M1.5 5l2.5 2.5 4.5-5"
-                        stroke="rgba(52,199,89,0.9)"
-                        strokeWidth="1.6"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                    </svg>
-                    Baixado!
-                  </>
-                ) : (
-                  <>
-                    <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-                      <path
-                        d="M5.5 1.5v5M3.5 4.5l2 2 2-2"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      />
-                      <path
-                        d="M1.5 9h8"
-                        stroke="currentColor"
-                        strokeWidth="1.4"
-                        strokeLinecap="round"
-                      />
-                    </svg>
-                    Baixar {selectedFormat}
-                  </>
-                )}
-              </button>
+              <div className="flex flex-col items-center gap-0.5 text-center">
+                <p className="text-xs font-medium tracking-tight text-white/80">
+                  {dragging ? "Solte para carregar" : "Arraste uma imagem"}
+                </p>
+                <p
+                  className={`text-[10px] text-white/30 ${dragging ? "invisible" : ""}`}
+                >
+                  ou <span className="text-white/55">clique para escolher</span>
+                </p>
+              </div>
             </div>
-          ) : (
-            <button
-              onClick={handleConvert}
-              disabled={!file}
-              style={{
-                width: "100%",
-                padding: "8.5px 0",
-                borderRadius: 9,
-                outline: "none",
-                fontSize: 11.5,
-                fontWeight: 600,
-                letterSpacing: "-0.01em",
-                cursor: file ? "pointer" : "not-allowed",
-                transition: "all 0.18s",
-                border: file
-                  ? "1px solid rgba(255,255,255,0.2)"
-                  : "1px solid rgba(255,255,255,0.06)",
-                background: file
-                  ? "rgba(255,255,255,0.14)"
-                  : "rgba(255,255,255,0.03)",
-                color: file
-                  ? "rgba(255,255,255,0.88)"
-                  : "rgba(255,255,255,0.16)",
-              }}
-              onMouseEnter={(e) => {
-                if (file)
-                  e.currentTarget.style.background = "rgba(255,255,255,0.2)";
-              }}
-              onMouseLeave={(e) => {
-                if (file)
-                  e.currentTarget.style.background = "rgba(255,255,255,0.14)";
-              }}
-            >
-              {status === "error"
-                ? "Tentar novamente →"
-                : `Converter → ${selectedFormat}`}
-            </button>
           )}
         </div>
       </div>
-    </>
+
+      {/* ── Format grid ── */}
+      <div className="shrink-0 px-3 pt-3">
+        <div className="mb-1.5 flex items-baseline justify-between px-0.5">
+          <span className="text-[10px] font-medium tracking-wide text-white/40 uppercase">
+            Converter para
+          </span>
+          <span className="text-[9.5px] text-white/30">{selected.desc}</span>
+        </div>
+        <div className="grid grid-cols-4 gap-1">
+          {FORMATS.map((f) => {
+            const active = f.value === selectedFormat;
+            const isSource = file?.format === f.value;
+            return (
+              <button
+                key={f.value}
+                title={isSource ? `${f.desc} · formato atual` : f.desc}
+                onClick={() => {
+                  if (f.value === selectedFormat) return;
+                  setSelectedFormat(f.value);
+                  resetResult();
+                }}
+                className={`relative h-7 rounded-lg text-[10.5px] font-semibold tracking-tight transition-all duration-150 active:scale-95 ${
+                  active
+                    ? "bg-accent text-white shadow-[0_2px_8px_rgba(10,132,255,0.4)]"
+                    : "bg-white/[0.06] text-white/65 hover:bg-white/[0.12] hover:text-white/90"
+                }`}
+              >
+                {f.value}
+                {isSource && (
+                  <span
+                    className={`absolute top-1 right-1 h-1 w-1 rounded-full ${
+                      active ? "bg-white/80" : "bg-white/40"
+                    }`}
+                  />
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* ── Toasts ── */}
+      <div className="pointer-events-none absolute inset-x-3 bottom-[56px] z-50">
+        {downloaded && file && (
+          <Toast tone="success">
+            <p className="text-[11px] font-semibold tracking-tight text-white/90">
+              Download concluído
+            </p>
+            <p className="truncate text-[9.5px] text-white/40">
+              {baseName(file.name)}.{selectedFormat.toLowerCase()}
+            </p>
+          </Toast>
+        )}
+        {!downloaded && errorMsg && (
+          <Toast tone="error">
+            <p className="line-clamp-3 text-[10.5px] leading-snug tracking-tight text-[#ff8a80]">
+              {errorMsg}
+            </p>
+          </Toast>
+        )}
+      </div>
+
+      {/* ── Action ── */}
+      <div className="mt-auto shrink-0 px-3 pb-3.5">
+        {status === "done" && convertedUrl ? (
+          <button
+            onClick={download}
+            className={`flex h-8 w-full items-center justify-center gap-1.5 rounded-[9px] text-[11.5px] font-semibold tracking-tight transition-all duration-200 active:scale-[0.98] ${
+              downloaded
+                ? "bg-success/15 text-success ring-1 ring-success/40"
+                : "bg-success text-white shadow-[0_2px_10px_rgba(52,199,89,0.35)] hover:brightness-110"
+            }`}
+          >
+            {downloaded ? (
+              <>
+                <CheckIcon className="animate-check-pop" />
+                Baixado
+              </>
+            ) : (
+              <>
+                <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
+                  <path
+                    d="M5.5 1.5v5M3.5 4.5l2 2 2-2"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M1.5 9h8"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                  />
+                </svg>
+                Baixar {selectedFormat}
+              </>
+            )}
+          </button>
+        ) : (
+          <button
+            onClick={handleConvert}
+            disabled={!file || status === "loading"}
+            className={`flex h-8 w-full items-center justify-center gap-2 rounded-[9px] text-[11.5px] font-semibold tracking-tight transition-all duration-200 ${
+              !file
+                ? "cursor-not-allowed bg-white/[0.04] text-white/20"
+                : status === "loading"
+                  ? "cursor-wait bg-accent/60 text-white/80"
+                  : "bg-accent text-white shadow-[0_2px_10px_rgba(10,132,255,0.35)] hover:brightness-110 active:scale-[0.98]"
+            }`}
+          >
+            {status === "loading" ? (
+              <>
+                <span className="h-3 w-3 animate-spin-fast rounded-full border-[1.5px] border-white/25 border-t-white" />
+                Convertendo…
+              </>
+            ) : !file ? (
+              "Escolha uma imagem"
+            ) : status === "error" ? (
+              "Tentar novamente"
+            ) : (
+              <>
+                {file.format && (
+                  <span className="text-white/60">{file.format} →</span>
+                )}
+                {selectedFormat}
+              </>
+            )}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Toast({
+  tone,
+  children,
+}: {
+  tone: "success" | "error";
+  children: ReactNode;
+}) {
+  const success = tone === "success";
+  return (
+    <div
+      className={`flex animate-fade-up items-center gap-2 rounded-[10px] border bg-[rgba(30,30,34,0.95)] px-3 py-2 shadow-[0_4px_20px_rgba(0,0,0,0.5)] backdrop-blur-xl ${
+        success ? "border-white/15" : "border-danger/30"
+      }`}
+    >
+      <div
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${
+          success
+            ? "border-success/40 bg-success/20 text-success"
+            : "border-danger/40 bg-danger/20 text-danger"
+        }`}
+      >
+        {success ? (
+          <CheckIcon className="animate-check-pop" />
+        ) : (
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+            <path
+              d="M1 1l6 6M7 1L1 7"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+          </svg>
+        )}
+      </div>
+      <div className="min-w-0">{children}</div>
+    </div>
+  );
+}
+
+function CheckIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      className={className}
+    >
+      <path
+        d="M1.5 5l2.5 2.5 4.5-5"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
   );
 }

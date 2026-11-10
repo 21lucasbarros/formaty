@@ -1,1 +1,45 @@
 @import "tailwindcss";
+
+@theme {
+  --color-accent: #0a84ff;
+  --color-success: #34c759;
+  --color-danger: #ff453a;
+
+  --animate-fade-up: fade-up 0.22s ease both;
+  --animate-check-pop: check-pop 0.3s ease both;
+  --animate-spin-fast: spin 0.7s linear infinite;
+  --animate-soft-pulse: soft-pulse 1s ease-in-out infinite;
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes check-pop {
+    0%   { transform: scale(0.5); opacity: 0; }
+    60%  { transform: scale(1.15); opacity: 1; }
+    100% { transform: scale(1); opacity: 1; }
+  }
+  @keyframes soft-pulse {
+    0%, 100% { transform: translateY(0); }
+    50%      { transform: translateY(-3px); }
+  }
+}
+
+html,
+body {
+  width: 220px;
+  height: 350px;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: transparent;
+  font-family: -apple-system, "SF Pro Text", BlinkMacSystemFont, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
