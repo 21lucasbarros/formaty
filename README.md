@@ -81,7 +81,23 @@ src/                  # Interface (React)
 src-tauri/
   src/lib.rs          # Comando convert_image, ícone da bandeja e janela
   tauri.conf.json     # Configuração da janela e do bundle
+  icons/source/       # SVGs originais do ícone do app e da barra de menus
 ```
+
+### Ícones
+
+Os ícones são gerados a partir dos SVGs em `src-tauri/icons/source/`:
+
+```bash
+# Ícone do app (todos os tamanhos)
+bun tauri icon src-tauri/icons/source/app-icon.svg
+
+# Ícone da barra de menus (template monocromático, 22pt @2x)
+bun tauri icon src-tauri/icons/source/tray-icon.svg -o /tmp/tray -p 44
+cp /tmp/tray/44x44.png src-tauri/icons/tray.png
+```
+
+> O primeiro comando também gera as pastas `android/` e `ios/`, que podem ser apagadas.
 
 ## Motivação
 

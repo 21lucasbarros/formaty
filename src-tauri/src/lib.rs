@@ -4,6 +4,7 @@ use std::io::Cursor;
 use tauri::{
     Manager,
     command,
+    image::Image,
     tray::{TrayIconBuilder, TrayIconEvent, MouseButtonState},
 };
 use tauri_plugin_positioner::{WindowExt, Position};
@@ -74,7 +75,8 @@ pub fn run() {
                 .expect("apply_vibrancy falhou");
 
             TrayIconBuilder::new()
-                .icon(app.default_window_icon().unwrap().clone())
+                .icon(Image::from_bytes(include_bytes!("../icons/tray.png"))?)
+                .icon_as_template(true)
                 .on_tray_icon_event(move |tray, event| {
                     tauri_plugin_positioner::on_tray_event(tray.app_handle(), &event);
 
