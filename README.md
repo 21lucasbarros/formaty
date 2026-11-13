@@ -118,6 +118,10 @@ bun tauri icon src-tauri/icons/source/app-icon.svg
 # Ícone da barra de menus (template monocromático, 22pt @2x)
 bun tauri icon src-tauri/icons/source/tray-icon.svg -o /tmp/tray -p 44
 cp /tmp/tray/44x44.png src-tauri/icons/tray.png
+
+# Ícone da bandeja do Windows (glifo colorido)
+bun tauri icon src-tauri/icons/source/tray-icon-windows.svg -o /tmp/tray-win -p 32
+cp /tmp/tray-win/32x32.png src-tauri/icons/tray-windows.png
 ```
 
 > O primeiro comando também gera as pastas `android/` e `ios/`, que podem ser apagadas.

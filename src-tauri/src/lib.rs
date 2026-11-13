@@ -198,13 +198,15 @@ pub fn run() {
                 });
 
             // macOS: ícone template monocromático, colorido pelo sistema conforme o tema.
-            // Windows: ícone colorido do app, visível em barra de tarefas clara ou escura.
+            // Windows: mesmo glifo em azul, visível em barra de tarefas clara ou escura.
             #[cfg(target_os = "macos")]
             let tray = tray
                 .icon(tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))?)
                 .icon_as_template(true);
             #[cfg(not(target_os = "macos"))]
-            let tray = tray.icon(app.default_window_icon().unwrap().clone());
+            let tray = tray.icon(tauri::image::Image::from_bytes(include_bytes!(
+                "../icons/tray-windows.png"
+            ))?);
 
             // Menu de clique direito só fora do macOS: lá o NSStatusItem abre o menu
             // em qualquer clique e o popover nunca aparece. No macOS, o "Sair" fica
