@@ -33,7 +33,8 @@ body {
   padding: 0;
   overflow: hidden;
   background: transparent;
-  font-family: -apple-system, "SF Pro Text", BlinkMacSystemFont, sans-serif;
+  font-family: -apple-system, "SF Pro Text", BlinkMacSystemFont,
+    "Segoe UI Variable Text", "Segoe UI", sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
   cursor: default;

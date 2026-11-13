@@ -1,17 +1,17 @@
 # Formaty
 
-Conversor de imagens leve que vive na barra de menus do macOS. Clique no ícone, arraste uma imagem, escolha o formato e baixe — sem abrir apps pesados nem enviar arquivos para sites.
+Conversor de imagens leve que vive na barra de menus do macOS e na bandeja do sistema do Windows. Clique no ícone, arraste uma imagem, escolha o formato e salve — sem abrir apps pesados nem enviar arquivos para sites.
 
 > **Status:** em desenvolvimento ativo. Funcionalidades podem mudar e bugs podem aparecer.
 
 ## Funcionalidades
 
-- **App de barra de menus** — abre como um popover logo abaixo do ícone, sem ícone no Dock
+- **macOS e Windows** — abre como um popover junto ao ícone da barra de menus/bandeja, sem ocupar o Dock ou a barra de tarefas
 - **Arrastar e soltar** ou clique para escolher a imagem
 - **Prévia com detalhes** — formato original, dimensões e tamanho do arquivo
 - **Comparação de tamanho** após a conversão (ex.: `1.2 MB → 340 KB −72%`)
 - **Conversão 100% local**, feita em Rust — nenhuma imagem sai do seu computador
-- Visual nativo com efeito de vidro (vibrancy) do macOS
+- Visual nativo com efeito de vidro (vibrancy no macOS, acrylic no Windows)
 
 ### Formatos suportados
 
@@ -30,12 +30,23 @@ A entrada aceita todos esses formatos, exceto AVIF (a feature `avif` da crate `i
 
 ## Como usar
 
-1. Clique no ícone do Formaty na barra de menus
+1. Clique no ícone do Formaty na barra de menus (macOS) ou na bandeja do sistema (Windows)
 2. Arraste uma imagem para a área de upload (ou clique nela)
 3. Escolha o formato de saída na grade
-4. Clique em **Converter** e depois em **Baixar**
+4. Clique em **Converter** e depois em **Salvar**, escolhendo onde guardar o arquivo
 
-Pressione `Esc` (com o popover em foco) ou clique no ícone de novo para fechar.
+Pressione `Esc` (com o popover em foco) ou clique no ícone de novo para fechar. Para encerrar o app, use o botão ⏻ no canto do popover (ou `⌘Q` no macOS); no Windows também dá para clicar com o botão direito no ícone da bandeja e escolher **Sair do Formaty**.
+
+> No Windows, o ícone pode ficar escondido na seta `^` da bandeja. Arraste-o para a barra de tarefas para mantê-lo sempre visível.
+
+## Download
+
+Os instaladores ficam na página de [Releases](https://github.com/21lucasbarros/formaty/releases):
+
+- **macOS:** `.dmg` (`aarch64` para Apple Silicon, `x64` para Intel)
+- **Windows:** `-setup.exe` ou `.msi`
+
+Os builds ainda não são assinados. No macOS, abra pela primeira vez com clique direito → **Abrir**; no Windows, no aviso do SmartScreen clique em **Mais informações → Executar assim mesmo**.
 
 ## Tecnologias
 
@@ -47,10 +58,11 @@ Pressione `Esc` (com o popover em foco) ou clique no ícone de novo para fechar.
 
 ### Pré-requisitos
 
-- macOS
 - [Bun](https://bun.sh/)
 - [Rust](https://www.rust-lang.org/tools/install)
-- [Pré-requisitos do Tauri](https://tauri.app/start/prerequisites/) (Xcode Command Line Tools)
+- [Pré-requisitos do Tauri](https://tauri.app/start/prerequisites/) do seu sistema:
+  - **macOS:** Xcode Command Line Tools
+  - **Windows:** Microsoft C++ Build Tools (carga "Desenvolvimento para desktop com C++") e WebView2, que já vem no Windows 10/11
 
 ### Rodando localmente
 
@@ -62,7 +74,7 @@ bun install
 bun run tauri dev
 ```
 
-O app não abre uma janela ao iniciar — procure o ícone na barra de menus.
+O app não abre uma janela ao iniciar — procure o ícone na barra de menus (macOS) ou na bandeja do sistema (Windows).
 
 ### Build de produção
 
@@ -70,7 +82,18 @@ O app não abre uma janela ao iniciar — procure o ícone na barra de menus.
 bun run tauri build
 ```
 
-O `.app` e o `.dmg` ficam em `src-tauri/target/release/bundle/`.
+Os instaladores ficam em `src-tauri/target/release/bundle/` (`.app`/`.dmg` no macOS, `.msi`/`-setup.exe` no Windows). Cada sistema só gera o próprio instalador.
+
+### Release automático
+
+O workflow em `.github/workflows/release.yml` compila para macOS (Apple Silicon e Intel) e Windows e cria um **rascunho** de Release com os instaladores. Para disparar:
+
+```bash
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Também dá para rodar manualmente na aba **Actions** do GitHub. Depois, revise o rascunho em **Releases** e publique.
 
 ### Estrutura
 
@@ -79,7 +102,7 @@ src/                  # Interface (React)
   app.tsx             # Componente principal
   app.css             # Tailwind, tema e animações
 src-tauri/
-  src/lib.rs          # Comando convert_image, ícone da bandeja e janela
+  src/lib.rs          # Conversão, salvamento, ícone da bandeja e janela
   tauri.conf.json     # Configuração da janela e do bundle
   icons/source/       # SVGs originais do ícone do app e da barra de menus
 ```

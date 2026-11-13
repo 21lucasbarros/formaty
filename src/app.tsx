@@ -2,8 +2,11 @@ import "./app.css";
 import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { save } from "@tauri-apps/plugin-dialog";
 
 type Format = "PNG" | "JPG" | "WEBP" | "AVIF" | "GIF" | "BMP" | "TIFF" | "ICO";
+
+type PlatformInfo = { os: string; backdrop: boolean };
 
 type Status = "idle" | "loading" | "done" | "error";
 
@@ -56,15 +59,21 @@ export default function App() {
   const [status, setStatus] = useState<Status>("idle");
   const [dragging, setDragging] = useState(false);
   const [convertedUrl, setConvertedUrl] = useState<string | null>(null);
-  const [downloaded, setDownloaded] = useState(false);
+  const [saved, setSaved] = useState<string | null>(null);
+  const [platform, setPlatform] = useState<PlatformInfo | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
 
-  // Esc esconde a janela (só quando ela está em foco)
+  useEffect(() => {
+    invoke<PlatformInfo>("platform_info").then(setPlatform).catch(() => {});
+  }, []);
+
+  // Esc esconde a janela e ⌘Q encerra o app (só quando ela está em foco)
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") getCurrentWindow().hide();
+      if (e.metaKey && e.key.toLowerCase() === "q") invoke("quit");
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
@@ -72,10 +81,10 @@ export default function App() {
 
   // Toasts somem sozinhos
   useEffect(() => {
-    if (!downloaded) return;
-    const t = setTimeout(() => setDownloaded(false), 2800);
+    if (!saved) return;
+    const t = setTimeout(() => setSaved(null), 2800);
     return () => clearTimeout(t);
-  }, [downloaded]);
+  }, [saved]);
 
   useEffect(() => {
     if (!errorMsg) return;
@@ -86,7 +95,7 @@ export default function App() {
   const resetResult = () => {
     setConvertedUrl(null);
     setStatus("idle");
-    setDownloaded(false);
+    setSaved(null);
     setErrorMsg(null);
   };
 
@@ -131,21 +140,34 @@ export default function App() {
       });
       setConvertedUrl(result);
       setStatus("done");
-      setDownloaded(false);
+      setSaved(null);
     } catch (e) {
       setErrorMsg(String(e));
       setStatus("error");
     }
   }, [file, selectedFormat]);
 
-  const download = () => {
+  const handleSave = async () => {
     if (!convertedUrl || !file) return;
-    const a = document.createElement("a");
-    a.href = convertedUrl;
-    a.download = `${baseName(file.name)}.${selectedFormat.toLowerCase()}`;
-    a.click();
-    setDownloaded(true);
+    const ext = selectedFormat.toLowerCase();
+
+    try {
+      const path = await save({
+        defaultPath: `${baseName(file.name)}.${ext}`,
+        filters: [{ name: selectedFormat, extensions: [ext] }],
+      });
+      if (!path) return;
+
+      await invoke("save_image", { path, dataUrl: convertedUrl });
+      setSaved(path.split(/[\\/]/).pop() ?? path);
+    } catch (e) {
+      setErrorMsg(String(e));
+    }
   };
+
+  const isWindows = platform?.os === "windows";
+  // Sem efeito de vidro nativo, a janela transparente precisa de um fundo próprio
+  const needsSolidBg = platform !== null && !platform.backdrop;
 
   const selected = FORMATS.find((f) => f.value === selectedFormat)!;
   const convertedSize = convertedUrl ? dataUrlSize(convertedUrl) : null;
@@ -155,7 +177,11 @@ export default function App() {
       : null;
 
   return (
-    <div className="relative flex h-[350px] w-[220px] flex-col overflow-hidden rounded-[18px] text-white">
+    <div
+      className={`relative flex h-[350px] w-[220px] flex-col overflow-hidden text-white ${
+        isWindows ? "rounded-lg" : "rounded-[18px]"
+      } ${needsSolidBg ? "border border-white/10 bg-[#1e1e22]" : ""}`}
+    >
       {/* ── Header / drag region ── */}
       <header
         data-tauri-drag-region
@@ -167,17 +193,33 @@ export default function App() {
         >
           Formaty
         </span>
-        {file && (
+        <div className="flex items-center gap-0.5">
+          {file && (
+            <button
+              onClick={() => {
+                setFile(null);
+                resetResult();
+              }}
+              className="rounded-md px-1.5 py-0.5 text-[10px] text-white/40 transition-colors hover:bg-white/10 hover:text-white/80"
+            >
+              Limpar
+            </button>
+          )}
           <button
-            onClick={() => {
-              setFile(null);
-              resetResult();
-            }}
-            className="rounded-md px-1.5 py-0.5 text-[10px] text-white/40 transition-colors hover:bg-white/10 hover:text-white/80"
+            onClick={() => invoke("quit")}
+            title={isWindows ? "Sair do Formaty" : "Sair do Formaty (⌘Q)"}
+            className="flex h-5 w-5 items-center justify-center rounded-md text-white/35 transition-colors hover:bg-white/10 hover:text-white/80"
           >
-            Limpar
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+              <path
+                d="M5 1v3.5M2.8 2.6a3.5 3.5 0 1 0 4.4 0"
+                stroke="currentColor"
+                strokeWidth="1.3"
+                strokeLinecap="round"
+              />
+            </svg>
           </button>
-        )}
+        </div>
       </header>
 
       {/* ── Drop zone ── */}
@@ -364,17 +406,17 @@ export default function App() {
 
       {/* ── Toasts ── */}
       <div className="pointer-events-none absolute inset-x-3 bottom-[56px] z-50">
-        {downloaded && file && (
+        {saved && file && (
           <Toast tone="success">
             <p className="text-[11px] font-semibold tracking-tight text-white/90">
-              Download concluído
+              Imagem salva
             </p>
             <p className="truncate text-[9.5px] text-white/40">
-              {baseName(file.name)}.{selectedFormat.toLowerCase()}
+              {saved}
             </p>
           </Toast>
         )}
-        {!downloaded && errorMsg && (
+        {!saved && errorMsg && (
           <Toast tone="error">
             <p className="line-clamp-3 text-[10.5px] leading-snug tracking-tight text-[#ff8a80]">
               {errorMsg}
@@ -387,17 +429,17 @@ export default function App() {
       <div className="mt-auto shrink-0 px-3 pb-3.5">
         {status === "done" && convertedUrl ? (
           <button
-            onClick={download}
+            onClick={handleSave}
             className={`flex h-8 w-full items-center justify-center gap-1.5 rounded-[9px] text-[11.5px] font-semibold tracking-tight transition-all duration-200 active:scale-[0.98] ${
-              downloaded
+              saved
                 ? "bg-success/15 text-success ring-1 ring-success/40"
                 : "bg-success text-white shadow-[0_2px_10px_rgba(52,199,89,0.35)] hover:brightness-110"
             }`}
           >
-            {downloaded ? (
+            {saved ? (
               <>
                 <CheckIcon className="animate-check-pop" />
-                Baixado
+                Salvo
               </>
             ) : (
               <>
@@ -416,7 +458,7 @@ export default function App() {
                     strokeLinecap="round"
                   />
                 </svg>
-                Baixar {selectedFormat}
+                Salvar {selectedFormat}
               </>
             )}
           </button>
