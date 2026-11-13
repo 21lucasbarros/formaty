@@ -1,6 +1,7 @@
 import "./app.css";
 import { useState, useRef, useCallback, useEffect, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 
 type Format = "PNG" | "JPG" | "WEBP" | "AVIF" | "GIF" | "BMP" | "TIFF" | "ICO";
 
@@ -59,6 +60,15 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
+
+  // Esc esconde a janela (só quando ela está em foco)
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") getCurrentWindow().hide();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, []);
 
   // Toasts somem sozinhos
   useEffect(() => {

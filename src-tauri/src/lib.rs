@@ -7,7 +7,6 @@ use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent, MouseButtonState},
 };
 use tauri_plugin_positioner::{WindowExt, Position};
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 use window_vibrancy::{apply_vibrancy, NSVisualEffectMaterial};
 
 #[command]
@@ -63,7 +62,6 @@ fn convert_image(base64_data: String, target_format: String) -> Result<String, S
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_positioner::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .invoke_handler(tauri::generate_handler![convert_image])
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -74,19 +72,6 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             apply_vibrancy(&window, NSVisualEffectMaterial::HudWindow, None, Some(12.0))
                 .expect("apply_vibrancy falhou");
-
-            let app_handle = app.handle().clone();
-            app.global_shortcut().on_shortcut(
-                Shortcut::new(None, Code::Escape),
-                move |_app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        let window = app_handle.get_webview_window("main").unwrap();
-                        if window.is_visible().unwrap() {
-                            window.hide().unwrap();
-                        }
-                    }
-                },
-            ).unwrap();
 
             TrayIconBuilder::new()
                 .icon(app.default_window_icon().unwrap().clone())

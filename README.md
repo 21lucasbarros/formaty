@@ -1,55 +1,92 @@
 # Formaty
 
-Conversor de formatos de imagem simples e rápido para macOS.
+Conversor de imagens leve que vive na barra de menus do macOS. Clique no ícone, arraste uma imagem, escolha o formato e baixe — sem abrir apps pesados nem enviar arquivos para sites.
 
-## tatus do Projeto
+> **Status:** em desenvolvimento ativo. Funcionalidades podem mudar e bugs podem aparecer.
 
-Este projeto está **em desenvolvimento ativo**. Funcionalidades podem mudar e bugs podem aparecer.
+## Funcionalidades
 
-## Motivação
+- **App de barra de menus** — abre como um popover logo abaixo do ícone, sem ícone no Dock
+- **Arrastar e soltar** ou clique para escolher a imagem
+- **Prévia com detalhes** — formato original, dimensões e tamanho do arquivo
+- **Comparação de tamanho** após a conversão (ex.: `1.2 MB → 340 KB −72%`)
+- **Conversão 100% local**, feita em Rust — nenhuma imagem sai do seu computador
+- Visual nativo com efeito de vidro (vibrancy) do macOS
 
-Criei o Formaty para suprir uma necessidade pessoal de converter imagens rapidamente entre diferentes formatos sem precisar abrir aplicativos pesados ou usar ferramentas online. Além disso, o projeto serve como uma forma de estudar e aprender **Tauri** e **Rust**, explorando a construção de aplicações desktop modernas.
+### Formatos suportados
 
-## Sobre o Projeto
+| Saída  | Descrição                  |
+| ------ | -------------------------- |
+| `PNG`  | Sem perda                  |
+| `JPG`  | Comprimido                 |
+| `WEBP` | Moderno, boa compressão    |
+| `AVIF` | Nova geração, menor tamanho |
+| `GIF`  | 256 cores                  |
+| `BMP`  | Bitmap sem compressão      |
+| `TIFF` | Sem perda                  |
+| `ICO`  | Ícone (máx. 256×256)       |
 
-Formaty é uma ferramenta desktop que permite:
+A entrada aceita todos esses formatos, exceto AVIF (a feature `avif` da crate `image` só codifica). SVG ainda não é suportado.
 
-- Converter imagens entre diversos formatos (PNG, JPG, WEBP, AVIF, GIF, BMP, TIFF, ICO, SVG)
-- Interface drag-and-drop intuitiva
-- Preview da imagem antes da conversão
-- Download rápido do arquivo convertido
-- Interface minimalista e sempre visível (menubar-style app)
+## Como usar
+
+1. Clique no ícone do Formaty na barra de menus
+2. Arraste uma imagem para a área de upload (ou clique nela)
+3. Escolha o formato de saída na grade
+4. Clique em **Converter** e depois em **Baixar**
+
+Pressione `Esc` (com o popover em foco) ou clique no ícone de novo para fechar.
 
 ## Tecnologias
 
-- **Frontend**: React + TypeScript + Tailwind CSS
-- **Backend**: Rust + Tauri v2
-- **Build**: Vite + Bun
+- **Frontend:** React 19 + TypeScript + Tailwind CSS v4
+- **Backend:** Rust + Tauri v2 (crate [`image`](https://crates.io/crates/image) para a conversão)
+- **Build:** Vite + Bun
 
-## Como Executar
+## Desenvolvimento
 
 ### Pré-requisitos
 
+- macOS
 - [Bun](https://bun.sh/)
-- [Rust](https://www.rust-lang.org/)
-- [Tauri CLI](https://tauri.app/)
+- [Rust](https://www.rust-lang.org/tools/install)
+- [Pré-requisitos do Tauri](https://tauri.app/start/prerequisites/) (Xcode Command Line Tools)
 
-### Desenvolvimento
+### Rodando localmente
 
 ```bash
 # Instalar dependências
 bun install
 
-# Executar em modo de desenvolvimento
+# Rodar em modo de desenvolvimento
 bun run tauri dev
 ```
 
-### Build
+O app não abre uma janela ao iniciar — procure o ícone na barra de menus.
+
+### Build de produção
 
 ```bash
 bun run tauri build
 ```
 
-## 📝 Licença
+O `.app` e o `.dmg` ficam em `src-tauri/target/release/bundle/`.
 
-Projeto pessoal em desenvolvimento.
+### Estrutura
+
+```
+src/                  # Interface (React)
+  app.tsx             # Componente principal
+  app.css             # Tailwind, tema e animações
+src-tauri/
+  src/lib.rs          # Comando convert_image, ícone da bandeja e janela
+  tauri.conf.json     # Configuração da janela e do bundle
+```
+
+## Motivação
+
+Criei o Formaty para resolver uma necessidade pessoal: converter imagens rapidamente sem depender de ferramentas online ou apps pesados. O projeto também é uma forma de estudar **Tauri** e **Rust** na construção de aplicações desktop modernas.
+
+## Licença
+
+Projeto pessoal, ainda sem licença definida.
