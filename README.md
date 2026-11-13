@@ -1,4 +1,8 @@
-# Formaty
+# <img src="src-tauri/icons/128x128@2x.png" alt="Ícone do Formaty" width="48" align="top"> Formaty
+
+[![Release](https://img.shields.io/github/v/release/21lucasbarros/formaty?label=download)](https://github.com/21lucasbarros/formaty/releases/latest)
+[![Licença: MIT](https://img.shields.io/badge/licen%C3%A7a-MIT-blue.svg)](LICENSE)
+![Plataformas](https://img.shields.io/badge/plataformas-macOS%20%7C%20Windows-lightgrey)
 
 Conversor de imagens leve que vive na barra de menus do macOS e na bandeja do sistema do Windows. Clique no ícone, arraste uma imagem, escolha o formato e salve — sem abrir apps pesados nem enviar arquivos para sites.
 
@@ -130,6 +134,10 @@ cp /tmp/tray-win/32x32.png src-tauri/icons/tray-windows.png
 
 Criei o Formaty para resolver uma necessidade pessoal: converter imagens rapidamente sem depender de ferramentas online ou apps pesados. O projeto também é uma forma de estudar **Tauri** e **Rust** na construção de aplicações desktop modernas.
 
+## Contribuindo
+
+Contribuições são bem-vindas! Abra uma [issue](https://github.com/21lucasbarros/formaty/issues) para relatar bugs ou sugerir ideias, ou envie um pull request.
+
 ## Licença
 
-Projeto pessoal, ainda sem licença definida.
+Distribuído sob a licença [MIT](LICENSE). Você pode usar, modificar e distribuir livremente, desde que mantenha o aviso de copyright.

@@ -1,8 +1,10 @@
 [package]
 name = "formaty"
 version = "0.1.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Conversor de imagens para a barra de menus do macOS e a bandeja do Windows"
+authors = ["Lucas Barros Simon"]
+license = "MIT"
+repository = "https://github.com/21lucasbarros/formaty"
 edition = "2021"
 
 [lib]
